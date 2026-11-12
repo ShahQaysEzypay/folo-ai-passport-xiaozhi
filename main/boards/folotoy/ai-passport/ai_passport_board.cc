@@ -3,6 +3,7 @@
 #include "codecs/es8311_audio_codec.h"
 #include "application.h"
 #include "button.h"
+#include "launcher.h"
 #include "config.h"
 #include "assets/lang_config.h"
 #include "cw2017_battery_monitor.h"
@@ -113,29 +114,50 @@ private:
         // work onto the main task so LVGL and codec access stay on one thread.
         auto up = adc_button_[kAdcButtonUp];
         up->OnClick([this]() {
-            Application::GetInstance().Schedule([this]() { ChangeVolume(10); });
+            Application::GetInstance().Schedule([this]() {
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kUp, LauncherButtonEvent::kClick)) {
+                    ChangeVolume(10);
+                }
+            });
         });
         up->OnLongPress([this]() {
             Application::GetInstance().Schedule([this]() {
-                GetAudioCodec()->SetOutputVolume(100);
-                GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kUp, LauncherButtonEvent::kLongPress)) {
+                    GetAudioCodec()->SetOutputVolume(100);
+                    GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
+                }
             });
         });
 
         auto down = adc_button_[kAdcButtonDown];
         down->OnClick([this]() {
-            Application::GetInstance().Schedule([this]() { ChangeVolume(-10); });
+            Application::GetInstance().Schedule([this]() {
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kDown, LauncherButtonEvent::kClick)) {
+                    ChangeVolume(-10);
+                }
+            });
         });
         down->OnLongPress([this]() {
             Application::GetInstance().Schedule([this]() {
-                GetAudioCodec()->SetOutputVolume(0);
-                GetDisplay()->ShowNotification(Lang::Strings::MUTED);
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kDown, LauncherButtonEvent::kLongPress)) {
+                    GetAudioCodec()->SetOutputVolume(0);
+                    GetDisplay()->ShowNotification(Lang::Strings::MUTED);
+                }
             });
         });
 
         auto ok = adc_button_[kAdcButtonOk];
         ok->OnClick([this]() {
-            Application::GetInstance().Schedule([this]() { ToggleChat(); });
+            Application::GetInstance().Schedule([this]() {
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kOk, LauncherButtonEvent::kClick)) {
+                    ToggleChat();
+                }
+            });
+        });
+        ok->OnLongPress([this]() {
+            Application::GetInstance().Schedule([this]() {
+                Launcher::GetInstance().HandleButton(LauncherButton::kOk, LauncherButtonEvent::kLongPress);
+            });
         });
     }
 

@@ -11,7 +11,11 @@
                 "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
                 "CONFIG_LV_USE_QRCODE=n",
                 "CONFIG_USE_ESP_WAKE_WORD=n",
-                "CONFIG_LANGUAGE_EN_US=y"
+                "CONFIG_LANGUAGE_EN_US=y",
+                "CONFIG_LV_FONT_MONTSERRAT_10=y",
+                "CONFIG_LV_FONT_MONTSERRAT_12=y",
+                "CONFIG_LV_FONT_UNSCII_8=y",
+                "CONFIG_LV_FONT_UNSCII_16=y"
             ]
         }
     ]

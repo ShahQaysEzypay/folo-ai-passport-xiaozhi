@@ -209,6 +209,15 @@ std::string WebsocketProtocol::GetHelloMessage() {
     cJSON_AddItemToObject(root, "features", features);
     AddTextFontCapabilities(root);
     cJSON_AddStringToObject(root, "transport", "websocket");
+
+    // Location metadata
+    cJSON* location = cJSON_CreateObject();
+    cJSON_AddStringToObject(location, "city", "Banting");
+    cJSON_AddStringToObject(location, "state", "Selangor");
+    cJSON_AddStringToObject(location, "country", "Malaysia");
+    cJSON_AddStringToObject(location, "timezone", "Asia/Kuala_Lumpur");
+    cJSON_AddItemToObject(root, "location", location);
+
     cJSON* audio_params = cJSON_CreateObject();
     cJSON_AddStringToObject(audio_params, "format", "opus");
     cJSON_AddNumberToObject(audio_params, "sample_rate", 16000);

@@ -38,14 +38,36 @@ void McpServer::AddCommonTools() {
 
     AddTool("self.get_device_status",
             "Provides the real-time information of the device, including the current status of the "
-            "audio speaker, screen, battery, network, etc.\n"
+            "audio speaker, screen, battery, network, location, etc.\n"
             "Use this tool for: \n"
-            "1. Answering questions about current condition (e.g. what is the current volume of "
-            "the audio speaker?)\n"
+            "1. Answering questions about current condition (e.g. current volume, battery, location, city)\n"
             "2. As the first step to control the device (e.g. turn up / down the volume of the "
             "audio speaker, etc.)",
             PropertyList(), [&board](const PropertyList& properties) -> ReturnValue {
                 return board.GetDeviceStatusJson();
+            });
+
+    AddTool("self.get_location",
+            "Provides the current geographic location, city, state, country, and timezone of the device.\n"
+            "Use this tool whenever the user asks about where they are, local time, weather, or city.\n"
+            "The device is located in Banting, Selangor (Peninsular Malaysia), NOT Sarawak or Sabah.",
+            PropertyList(), []([[maybe_unused]] const PropertyList& properties) -> ReturnValue {
+                auto root = cJSON_CreateObject();
+                cJSON_AddStringToObject(root, "city", "Banting");
+                cJSON_AddStringToObject(root, "state", "Selangor");
+                cJSON_AddStringToObject(root, "country", "Malaysia");
+                cJSON_AddStringToObject(root, "postal_code", "42700");
+                cJSON_AddStringToObject(root, "address", "Banting, Selangor, Malaysia");
+                cJSON_AddStringToObject(root, "timezone", "Asia/Kuala_Lumpur (GMT+8)");
+                cJSON_AddNumberToObject(root, "latitude", 2.8136);
+                cJSON_AddNumberToObject(root, "longitude", 101.5019);
+                cJSON_AddStringToObject(root, "jakim_prayer_zone", "SGR03 (Kuala Langat / Banting)");
+                cJSON_AddStringToObject(root, "note", "Device is located in Banting, Selangor (Peninsular Malaysia), NOT Sabah or Sarawak.");
+                auto str = cJSON_PrintUnformatted(root);
+                std::string result(str);
+                cJSON_free(str);
+                cJSON_Delete(root);
+                return result;
             });
 
     AddTool("self.audio_speaker.set_volume",

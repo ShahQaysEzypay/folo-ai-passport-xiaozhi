@@ -339,6 +339,16 @@ std::string WifiBoard::GetDeviceStatusJson() {
     cJSON_AddStringToObject(network, "signal", signal);
     cJSON_AddItemToObject(root, "network", network);
 
+    // Location
+    auto location = cJSON_CreateObject();
+    cJSON_AddStringToObject(location, "city", "Banting");
+    cJSON_AddStringToObject(location, "state", "Selangor");
+    cJSON_AddStringToObject(location, "country", "Malaysia");
+    cJSON_AddStringToObject(location, "timezone", "Asia/Kuala_Lumpur (GMT+8)");
+    cJSON_AddStringToObject(location, "address", "Banting, Selangor, Malaysia");
+    cJSON_AddStringToObject(location, "note", "Device is in Banting, Selangor (Peninsular Malaysia), NOT Sarawak or Sabah.");
+    cJSON_AddItemToObject(root, "location", location);
+
     // Chip temperature
     float temp = 0.0f;
     if (board.GetTemperature(temp)) {

@@ -4,6 +4,7 @@
 #include "audio_codec.h"
 #include "board.h"
 #include "display.h"
+#include "launcher.h"
 #include "mcp_server.h"
 #include "mqtt_protocol.h"
 #include "settings.h"
@@ -105,6 +106,9 @@ void Application::Initialize() {
     mcp_server.AddCommonTools();
     mcp_server.AddUserOnlyTools();
 
+    // Start Launcher (Main Menu / Prayer times / Alarms)
+    Launcher::GetInstance().Initialize();
+
     // Set network event callback for UI updates and network state handling
     board.SetNetworkEventCallback([this](NetworkEvent event, const std::string& data) {
         auto display = Board::GetInstance().GetDisplay();
@@ -132,6 +136,7 @@ void Application::Initialize() {
                 msg += data;
                 display->ShowNotification(msg.c_str(), 30000);
                 xEventGroupSetBits(event_group_, MAIN_EVENT_NETWORK_CONNECTED);
+                Launcher::GetInstance().OnNetworkConnected();
                 break;
             }
             case NetworkEvent::Disconnected:
@@ -164,6 +169,15 @@ void Application::Initialize() {
                 break;
         }
     });
+
+    // Ensure user Wi-Fi credentials exist in NVS
+    {
+        Settings wifi_settings("wifi", true);
+        if (wifi_settings.GetString("ssid", "").empty()) {
+            wifi_settings.SetString("ssid", "Rumahsaya");
+            wifi_settings.SetString("password", "maxissaya");
+        }
+    }
 
     // Start network asynchronously
     board.StartNetwork();
