@@ -113,7 +113,19 @@ private:
         // Button callbacks run on the button task; schedule all UI/audio
         // work onto the main task so LVGL and codec access stay on one thread.
         auto up = adc_button_[kAdcButtonUp];
+        up->OnPressDown([this]() {
+            Application::GetInstance().Schedule([this]() {
+                Launcher::GetInstance().HandleButton(LauncherButton::kUp, LauncherButtonEvent::kPressDown);
+            });
+        });
         up->OnClick([this]() {
+            Application::GetInstance().Schedule([this]() {
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kUp, LauncherButtonEvent::kClick)) {
+                    ChangeVolume(10);
+                }
+            });
+        });
+        up->OnDoubleClick([this]() {
             Application::GetInstance().Schedule([this]() {
                 if (!Launcher::GetInstance().HandleButton(LauncherButton::kUp, LauncherButtonEvent::kClick)) {
                     ChangeVolume(10);
@@ -130,7 +142,19 @@ private:
         });
 
         auto down = adc_button_[kAdcButtonDown];
+        down->OnPressDown([this]() {
+            Application::GetInstance().Schedule([this]() {
+                Launcher::GetInstance().HandleButton(LauncherButton::kDown, LauncherButtonEvent::kPressDown);
+            });
+        });
         down->OnClick([this]() {
+            Application::GetInstance().Schedule([this]() {
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kDown, LauncherButtonEvent::kClick)) {
+                    ChangeVolume(-10);
+                }
+            });
+        });
+        down->OnDoubleClick([this]() {
             Application::GetInstance().Schedule([this]() {
                 if (!Launcher::GetInstance().HandleButton(LauncherButton::kDown, LauncherButtonEvent::kClick)) {
                     ChangeVolume(-10);
@@ -147,7 +171,19 @@ private:
         });
 
         auto ok = adc_button_[kAdcButtonOk];
+        ok->OnPressDown([this]() {
+            Application::GetInstance().Schedule([this]() {
+                Launcher::GetInstance().HandleButton(LauncherButton::kOk, LauncherButtonEvent::kPressDown);
+            });
+        });
         ok->OnClick([this]() {
+            Application::GetInstance().Schedule([this]() {
+                if (!Launcher::GetInstance().HandleButton(LauncherButton::kOk, LauncherButtonEvent::kClick)) {
+                    ToggleChat();
+                }
+            });
+        });
+        ok->OnDoubleClick([this]() {
             Application::GetInstance().Schedule([this]() {
                 if (!Launcher::GetInstance().HandleButton(LauncherButton::kOk, LauncherButtonEvent::kClick)) {
                     ToggleChat();

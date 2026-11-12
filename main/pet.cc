@@ -91,7 +91,6 @@ void Pet::PlayChime() {
     auto codec = Board::GetInstance().GetAudioCodec();
     if (codec != nullptr) {
         codec->SetOutputVolume(100);
-        codec->EnableOutput(true);
     }
     Application::GetInstance().Schedule([]() {
         Application::GetInstance().PlaySound(Lang::Sounds::OGG_SUCCESS);
@@ -478,19 +477,20 @@ void Pet::UpdateUi() {
 void Pet::Tick() {
     if (root_ == nullptr || lv_obj_has_flag(root_, LV_OBJ_FLAG_HIDDEN)) return;
 
-    auto* display = Board::GetInstance().GetDisplay();
-    DisplayLockGuard lock(display);
-
     tick_counter_++;
 
-    // Handle timed animation countdown (e.g. Eating / Cleaning celebration)
+    // Handle timed animation countdown in Room mode (e.g. Eating / Cleaning celebration)
     if (anim_ticks_ > 0) {
         anim_ticks_--;
-        if (anim_ticks_ == 0) {
+        if (anim_ticks_ == 0 || mode_ != kPetModeRoom) {
+            anim_ticks_ = 0;
             lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
-            UpdateUi();
+            if (mode_ == kPetModeRoom) {
+                UpdateUi();
+            }
+        } else {
+            return;
         }
-        return;
     }
 
     // 1. In Yarn Catch Minigame: Smoothly glide the pink yarn cursor at 60ms ticks
@@ -498,12 +498,13 @@ void Pet::Tick() {
         yarn_pos_ += yarn_dir_;
         if (yarn_pos_ >= 170) {
             yarn_pos_ = 170;
-            yarn_dir_ = - std::abs(yarn_dir_);
+            yarn_dir_ = -std::abs(yarn_dir_);
         } else if (yarn_pos_ <= 4) {
             yarn_pos_ = 4;
             yarn_dir_ = std::abs(yarn_dir_);
         }
         lv_obj_set_pos(catch_cursor_, yarn_pos_, 2);
+        lv_obj_invalidate(sub_panel_);
 
         // Animate Mochi bouncing excitedly while playing!
         if ((tick_counter_ % 6) == 0) {
@@ -523,12 +524,13 @@ void Pet::Tick() {
             rhythm_dir_ = 4;
         }
         lv_bar_set_value(rhythm_bar_, rhythm_val_, LV_ANIM_OFF);
-        // Glow gold when inside sweet lullaby zone (55..95)
-        if (rhythm_val_ >= 55) {
+        // Glow gold when inside sweet lullaby zone (45..95)
+        if (rhythm_val_ >= 45) {
             lv_obj_set_style_bg_color(rhythm_bar_, lv_color_hex(0xfde047), LV_PART_INDICATOR);
         } else {
             lv_obj_set_style_bg_color(rhythm_bar_, lv_color_hex(0xc084fc), LV_PART_INDICATOR);
         }
+        lv_obj_invalidate(sub_panel_);
         return;
     }
 
@@ -560,6 +562,8 @@ void Pet::OpenFeedMenu() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
+    anim_ticks_ = 0;
+    lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
     mode_ = kPetModeFeedSelect;
     menu_choice_ = 0;
 
@@ -624,6 +628,8 @@ void Pet::OpenPlayMenu() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
+    anim_ticks_ = 0;
+    lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
     mode_ = kPetModePlaySelect;
     menu_choice_ = 0;
 
@@ -642,35 +648,41 @@ void Pet::StartCatchGame() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
+    anim_ticks_ = 0;
+    lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
     is_sleeping_ = false;
     mode_ = kPetModePlayCatch;
     play_score_ = 0;
-    yarn_pos_ = 10;
-    yarn_dir_ = 7;
+    yarn_pos_ = 8;
+    yarn_dir_ = 6;
+    last_pat_time_ms_ = esp_timer_get_time() / 1000;
 
     lv_obj_clear_flag(sub_panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sub_label_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(rhythm_bar_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(catch_bar_bg_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_pos(catch_cursor_, yarn_pos_, 2);
 
     lv_image_set_src(cat_img_, &pet_cat_happy_dsc);
-    lv_label_set_text(speech_bubble_, "Press OK in the GREEN zone!");
+    lv_label_set_text(speech_bubble_, "Tap OK when yarn is in GREEN!");
     lv_label_set_text(footer_lbl_, "OK:Catch Yarn! (0/3)\nHOLD OK:Exit Game");
 }
 
 void Pet::HandleCatchButton() {
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    if (last_pat_time_ms_ > 0 && (now_ms - last_pat_time_ms_) < 120) {
+        return;
+    }
+    last_pat_time_ms_ = now_ms;
+
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
-    // Target box is X=70..122 (width 52), cursor is width 16
-    if (yarn_pos_ >= 58 && yarn_pos_ <= 122) {
+    // Target box is X=70..122 (width 52), cursor is width 16; generous window 46..134
+    if (yarn_pos_ >= 46 && yarn_pos_ <= 134) {
         play_score_++;
         happiness_ = std::min(100, happiness_ + 15);
         energy_ = std::max(15, energy_ - 3);
-        // Speed up slightly each round!
-        yarn_dir_ = (yarn_dir_ > 0) ? (7 + play_score_ * 2) : -(7 + play_score_ * 2);
-
-        PlayChime();
 
         if (play_score_ >= 3) {
             mode_ = kPetModeRoom;
@@ -679,17 +691,30 @@ void Pet::HandleCatchButton() {
             lv_image_set_src(cat_img_, &pet_cat_happy_dsc);
             lv_label_set_text(speech_bubble_, "YOU WON! Mochi is so happy! <3");
             lv_label_set_text(footer_lbl_, "UP/DN:Move  OK:Pick\nHOLD OK:Back to Menu");
+            PlayChime();
             UpdateUi();
             SaveState();
         } else {
+            // Launch next yarn ball from the opposite side for clear multi-round action!
+            if (play_score_ % 2 == 1) {
+                yarn_pos_ = 166;
+                yarn_dir_ = -(6 + play_score_);
+            } else {
+                yarn_pos_ = 8;
+                yarn_dir_ = (6 + play_score_);
+            }
+            lv_obj_set_pos(catch_cursor_, yarn_pos_, 2);
+            lv_image_set_src(cat_img_, &pet_cat_happy_dsc);
+
             char buf[64];
-            snprintf(buf, sizeof(buf), "GREAT CATCH! * (%d/3)", play_score_);
+            snprintf(buf, sizeof(buf), "GREAT CATCH! * (%d/3) Next ball!", play_score_);
             lv_label_set_text(speech_bubble_, buf);
             snprintf(buf, sizeof(buf), "OK:Catch Yarn! (%d/3)\nHOLD OK:Exit Game", play_score_);
             lv_label_set_text(footer_lbl_, buf);
+            lv_obj_invalidate(sub_panel_);
         }
     } else {
-        lv_label_set_text(speech_bubble_, "Almost! Aim for the GREEN box!");
+        lv_label_set_text(speech_bubble_, "So close! Tap OK in GREEN box!");
     }
 }
 
@@ -703,9 +728,12 @@ void Pet::StartDanceGame() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
+    anim_ticks_ = 0;
+    lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
     is_sleeping_ = false;
     mode_ = kPetModePlayDance;
     dance_step_ = 0;
+    last_pat_time_ms_ = esp_timer_get_time() / 1000;
 
     for (int i = 0; i < 3; i++) {
         dance_moves_[i] = esp_random() % 3;
@@ -725,6 +753,12 @@ void Pet::StartDanceGame() {
 }
 
 void Pet::HandleDanceButton(LauncherButton button) {
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    if (last_pat_time_ms_ > 0 && (now_ms - last_pat_time_ms_) < 120) {
+        return;
+    }
+    last_pat_time_ms_ = now_ms;
+
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
@@ -766,35 +800,40 @@ void Pet::StartSleep() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
+    anim_ticks_ = 0;
+    lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
     mode_ = kPetModeSleep;
     sleep_pats_ = 0;
-    rhythm_val_ = 20;
+    rhythm_val_ = 30;
     rhythm_dir_ = 4;
-    last_pat_time_ms_ = 0;
+    last_pat_time_ms_ = esp_timer_get_time() / 1000;
 
     lv_obj_clear_flag(sub_panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sub_label_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(catch_bar_bg_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(rhythm_bar_, LV_OBJ_FLAG_HIDDEN);
+    lv_bar_set_value(rhythm_bar_, rhythm_val_, LV_ANIM_OFF);
 
     lv_image_set_src(cat_img_, &pet_cat_sleep_dsc);
-    lv_label_set_text(speech_bubble_, "Tap OK when bar glows GOLD!");
+    lv_label_set_text(speech_bubble_, "Tap OK to pat Mochi to sleep!");
     lv_label_set_text(footer_lbl_, "Tap OK gently [0/5 pats]\nHOLD OK:Cancel");
 }
 
 void Pet::HandleSleepButton() {
     int64_t now_ms = esp_timer_get_time() / 1000;
+    if (last_pat_time_ms_ > 0 && (now_ms - last_pat_time_ms_) < 120) {
+        return;
+    }
+    last_pat_time_ms_ = now_ms;
+
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
-    // Check that user isn't mashing rapidly (< 400ms)
-    if (last_pat_time_ms_ > 0 && (now_ms - last_pat_time_ms_) < 400) {
-        lv_label_set_text(speech_bubble_, "Shhh~ Slower, gentle pats...");
-        return;
-    }
-
-    last_pat_time_ms_ = now_ms;
     sleep_pats_++;
+    // Visual pulse feedback on pat
+    rhythm_val_ = std::min(100, sleep_pats_ * 20);
+    lv_bar_set_value(rhythm_bar_, rhythm_val_, LV_ANIM_OFF);
+    lv_obj_set_style_bg_color(rhythm_bar_, lv_color_hex(0xfde047), LV_PART_INDICATOR);
 
     static const char* kSleepMsgs[5] = {
         "*pat pat* Mochi yawns... (~o~)",
@@ -859,9 +898,12 @@ void Pet::StartBath() {
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
+    anim_ticks_ = 0;
+    lv_obj_add_flag(treat_img_, LV_OBJ_FLAG_HIDDEN);
     is_sleeping_ = false;
     mode_ = kPetModeBath;
     bath_step_ = 0;
+    last_pat_time_ms_ = esp_timer_get_time() / 1000;
 
     lv_obj_clear_flag(sub_panel_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(sub_label_, LV_OBJ_FLAG_HIDDEN);
@@ -876,6 +918,12 @@ void Pet::StartBath() {
 }
 
 void Pet::HandleBathButton() {
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    if (last_pat_time_ms_ > 0 && (now_ms - last_pat_time_ms_) < 120) {
+        return;
+    }
+    last_pat_time_ms_ = now_ms;
+
     auto* display = Board::GetInstance().GetDisplay();
     DisplayLockGuard lock(display);
 
@@ -930,8 +978,42 @@ bool Pet::HandleButton(LauncherButton button, LauncherButtonEvent event) {
         return true;
     }
 
+    // Active Mini-Games respond immediately on kPressDown (0ms latency & immune to double-click swallowing)
+    if (mode_ == kPetModePlayCatch || mode_ == kPetModePlayDance ||
+        mode_ == kPetModeSleep || mode_ == kPetModeBath) {
+        if (event != LauncherButtonEvent::kPressDown) {
+            return true;
+        }
+        if (mode_ == kPetModePlayCatch) {
+            if (button == LauncherButton::kOk) {
+                HandleCatchButton();
+            }
+            return true;
+        }
+        if (mode_ == kPetModePlayDance) {
+            HandleDanceButton(button);
+            return true;
+        }
+        if (mode_ == kPetModeSleep) {
+            if (button == LauncherButton::kOk) {
+                HandleSleepButton();
+            }
+            return true;
+        }
+        if (mode_ == kPetModeBath) {
+            HandleBathButton();
+            return true;
+        }
+    }
+
     if (event != LauncherButtonEvent::kClick) {
-        return false;
+        return true;
+    }
+
+    // Ignore the release click from the press that just finished a minigame
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    if (last_pat_time_ms_ > 0 && (now_ms - last_pat_time_ms_) < 350) {
+        return true;
     }
 
     // 1. Feed Treat Selector
@@ -964,31 +1046,6 @@ bool Pet::HandleButton(LauncherButton button, LauncherButtonEvent event) {
                 StartDanceGame();
             }
         }
-        return true;
-    }
-
-    // 3. Active Mini-Games
-    if (mode_ == kPetModePlayCatch) {
-        if (button == LauncherButton::kOk) {
-            HandleCatchButton();
-        }
-        return true;
-    }
-
-    if (mode_ == kPetModePlayDance) {
-        HandleDanceButton(button);
-        return true;
-    }
-
-    if (mode_ == kPetModeSleep) {
-        if (button == LauncherButton::kOk) {
-            HandleSleepButton();
-        }
-        return true;
-    }
-
-    if (mode_ == kPetModeBath) {
-        HandleBathButton();
         return true;
     }
 
